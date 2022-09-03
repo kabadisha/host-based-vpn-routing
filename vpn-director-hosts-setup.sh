@@ -40,4 +40,4 @@ iptables -I FORWARD -j VPN_KILLSWITCH
 /jffs/scripts/vpn-director-hosts-update.sh
 
 # Add crontab entry to refresh domain based rules every 10 minutes
-cru a vpn-director-hosts-update "*/10 * * * *" /jffs/scripts/vpn-director-hosts-update.sh
+cru a vpn-director-hosts-update "0 */12 * * *" /jffs/scripts/vpn-director-hosts-update.sh

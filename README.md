@@ -6,7 +6,7 @@ I'm a user of and a huge fan of the Merlin firmware for Asus routers. It rocks. 
 
 One of the new features recently is the VPN Director. This lets you more easily set policy rules for what traffic should route via your VPN and even has a 'kill switch' which prevents that traffic from leaking out via your normal WAN connection if the VPN dies, which is great. However, it has a few limitations:
 
-### Kill switch limitations
+### Merlin's built in 'kill switch' has limitations
 1. The 'kill switch' only applies to rules where you have specified a local IP. If you leave that blank to create a rule that applies to all local IPs trying to reach a specific destination IP, when the VPN is disabled, these packets will flow over the WAN. Damn.
 2. You can only specify a destination IP or range, not a hostname. This sucks because it would be nice to have a policy rule to send all traffic to netflix.com (for example) via the VPN, but have all other traffic flow out directly over the WAN as normal.
 	> :information_source: This limitation makes sense because the sub-systems that handle this kind of routing use IP addresses not hostnames. Additionally, IPs change so you'd have to somehow keep doing DNS lookups and updating the rules. Annoying though. I wonder if there is a workaround?...
@@ -14,6 +14,17 @@ One of the new features recently is the VPN Director. This lets you more easily 
 ### The solution
 
 I've created a set of custom scripts that solves both problems by converting a list of hostnames to route via VPN into VPN Director policy rules as well as corresponding iptables rules to block traffic to those hosts routing via the WAN.
+
+### Limitations
+Some domains (like netflix.com) use DNS based load-balancing and so return different IPs each time you do a lookup.
+This means that nslookup always gets different IPs and so the script will always think that IPs have changed.
+It also means that clients will often be provided an IP that is not the one the script got and so that traffic would slip past the checks and escape over the WAN :-(
+
+I've tried to find a workaround for this, but sadly, I don't think there is one. Providers like Netflix use huge IP ranges that change often. We don't have a reliable way to get all of them at any time.
+As such, I think it's better to only use this script to direct specific traffic to smaller providers over the VPN, rather than send all traffic over the VPN and then add WAN exceptions.
+Basically, don't add hosts (like netflix.com) that have this issue.
+
+I've also changed the cron job to update the rules run only once every 12 hours to reduce writes to JFFS.
 
 #### Prerequisites
 1. You should have already successfully configured your VPN and set the 'Redirect Internet traffic through tunnel' setting to 'VPN Director (policy rules)' mode.
