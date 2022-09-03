@@ -8,8 +8,7 @@ set -u
 RULES='
 whatismyipaddress.com|OVPN1
 www.whatismyip-address.com|OVPN2
-whatismyipaddress.com|OVPN1
-www.netflix.com|WAN'
+whatismyipaddress.com|WAN'
 
 # Create a new temp file with any rules manually created using the router's UI.
 # When we edit the rules via the GUI, the rules file gets put on one line
@@ -31,11 +30,26 @@ for RULE in ${RULES}; do
   HOST=${RULE%\|*}
   INTERFACE=${RULE#*\|}
 
+  # We choose a DNS server to use for nslookup.
+  # The IPs in VPN Director rules must be the same as those in use by client
+  # devices that are using cached DNS lookups. The solution is to query the DNS
+  # server that LAN clients are actually using for their lookups.
+  if [ $(nvram get dhcp_dns1_x) ]; then
+    # If a DNS server is configured in the DHCP server settings, then use that.
+    DNS_SERVER=$(nvram get dhcp_dns1_x)
+  elif [ $(nvram get wan_dns1_x) ]; then
+    # If a DNS server is configured in the WAN settings, then use that.
+    DNS_SERVER=$(nvram get wan_dns1_x)
+  else
+    # Otherwise, just use the default local DNS server (not ideal).
+    DNS_SERVER=""
+  fi
+
   # Run nslookup for each host to get it's IP addresses, discarding the first two lines
   # and filter for lines with 'Address' in them. N.B. there is often more than one.
   # Then ditch any lines with a ':' in them, since those will be IPv6 results.
   # Then sort the results so that we get some consitency when checking for changes later.
-  for IP in $(nslookup $HOST | awk '(NR>2) && /^Address/ {print $3}' | awk '!/:/' | sort); do
+  for IP in $(nslookup $HOST $DNS_SERVER | awk '(NR>2) && /^Address/ {print $3}' | awk '!/:/' | sort); do
     echo '<1>DNS-AUTO-'$HOST'>>'$IP'>'$INTERFACE
 
     # If the rule was not directing to WAN, then add the IP to a list for later
