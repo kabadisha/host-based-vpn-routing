@@ -83,7 +83,7 @@ if ! diff /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist >/dev/nul
   date >> /tmp/vpn_rules_update_audit.log
   cp /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist
   # Restart VPN routing in order to refresh rules:
-  service restart_vpnrouting0
+  service restart_vpnrouting
 
 else
   echo 'No changes to VPN Director policies since last run. Nothing to update.'
