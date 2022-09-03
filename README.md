@@ -9,7 +9,7 @@ One of the new features recently is the VPN Director. This lets you more easily 
 ### Kill switch limitations
 1. The 'kill switch' only applies to rules where you have specified a local IP. If you leave that blank to create a rule that applies to all local IPs trying to reach a specific destination IP, when the VPN is disabled, these packets will flow over the WAN. Damn.
 2. You can only specify a destination IP or range, not a hostname. This sucks because it would be nice to have a policy rule to send all traffic to netflix.com (for example) via the VPN, but have all other traffic flow out directly over the WAN as normal.
-> :information_source: This limitation makes sense because the sub-systems that handle this kind of routing use IP addresses not hostnames. Additionally, IPs change so you'd have to somehow keep doing DNS lookups and updating the rules. Annoying though. I wonder if there is a workaround?...
+  > :information_source: This limitation makes sense because the sub-systems that handle this kind of routing use IP addresses not hostnames. Additionally, IPs change so you'd have to somehow keep doing DNS lookups and updating the rules. Annoying though. I wonder if there is a workaround?...
 
 ### The solution
 
