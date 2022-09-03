@@ -7,6 +7,8 @@ set -u
 # Edit this list of rules (just be careful with the single quote at the beginning and end of the list):
 RULES='
 whatismyipaddress.com|OVPN1
+www.whatismyip-address.com|OVPN2
+whatismyipaddress.com|OVPN1
 netflix.com|WAN'
 
 # Create a new temp file with any manually created rules
@@ -16,6 +18,8 @@ netflix.com|WAN'
 # We use '|| true' to force the command result to be 0 even if no rows were found by
 # grep (because there were no manually created rules).
 sed 's:\(.\)<:\1\n<:g' /jffs/openvpn/vpndirector_rulelist | grep -v 'DNS-AUTO-' > /tmp/vpndirector_rulelist || true
+
+# Print out any manual rules that were found (useful for debugging when running the script manually).
 cat /tmp/vpndirector_rulelist
 
 IPS=""
@@ -34,8 +38,11 @@ for RULE in ${RULES}; do
   for IP in $(nslookup $HOST | awk '(NR>2) && /^Address/ {print $3}' | awk '!/:/' | sort); do
     echo '<1>DNS-AUTO-'$HOST'>>'$IP'>'$INTERFACE
 
-    # Add the IP to a list for later when we create the corresponding iptables rules
-    IPS="${IPS} ${IP}"
+    # If the rule was not directing to WAN, then add the IP to a list for later
+    # when we create the corresponding iptables rules to act as the 'kill switch'
+    if [ "$INTERFACE" != "WAN" ]; then
+      IPS="${IPS} ${IP}"
+    fi
 
     # Add an entry to VPN Director rules temporary file:
     # Rule example:
@@ -52,34 +59,31 @@ let RULE_COUNT=$INDEX-1
 # This saves on writes to jffs and reduces wear on the flash drive.
 if ! diff /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist >/dev/null; then
   logger -s -p user.info 'New changes to VPN Director policies detected, writing to jffs...'
+
+  # We first flush any previous IPs from the swap ipset
+  ipset flush vpn-killswitch-ipset-swap
+
+  echo 'Updating vpn-only-ipset-swap ipset...'
+  for IP in ${IPS}; do
+    # N.B. We don't just add using the hostname since the ipset command would
+    # only add the first IP if more than one applies to a host. We want them all.
+    # The -exist flag avoids us having to test if each IP already exists in the set.
+    ipset add vpn-killswitch-ipset-swap $IP -exist
+  done
+
+  echo 'Swapping in the ipset to live. IPs are:'
+  ipset list vpn-killswitch-ipset-swap
+  ipset swap vpn-killswitch-ipset-swap vpn-killswitch-ipset-live
+
+  # We flush the swap ipset to save a bit of memory now we've finished with it.
+  ipset flush vpn-killswitch-ipset-swap
+
+  echo 'Restarting VPN routing to apply new rules...'
   date >> /tmp/vpn_rules_update_audit.log
   cp /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist
-
   # Restart VPN routing in order to refresh rules:
   service restart_vpnrouting0
 
-  # Use iptables to prevent connecting to the IPs via WAN (so no connection if VPN down)
-  # We insert all the rules at the start of the chain, then delete the old rules later.
-  # This is a bit cumbersome, but iptables doesn't give you a neat way to check if a rule already exists.
-  echo 'Creating iptables rules...'
-  for IP in ${IPS}; do
-    iptables -I CUSTOM_FORWARD 1 -d $IP -o eth0 -j REJECT --reject-with icmp-net-unreachable
-  done
-
-  # Add rule to return to the calling chain
-  echo 'Inserting new iptables RETURN rule at position '$(($RULE_COUNT+1))
-  iptables -I CUSTOM_FORWARD $(($RULE_COUNT+1)) -j RETURN
-
-  let RULE_TO_REMOVE=$RULE_COUNT+2
-
-  # Now we trim any old rules from the end of the chain.
-  # N.B. As the chain shrinks with each one you remove, we don't need to increment the index.
-  REMOVED_RULE_COUNT=0
-  while iptables -D CUSTOM_FORWARD $RULE_TO_REMOVE 2> /dev/null; do
-    let REMOVED_RULE_COUNT=$REMOVED_RULE_COUNT+1
-  done
-  echo 'Removed '$REMOVED_RULE_COUNT' old rules'
-
-  else
-    echo 'No changes to VPN Director policies since last run.'
+else
+  echo 'No changes to VPN Director policies since last run. Nothing to update.'
 fi
