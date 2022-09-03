@@ -17,18 +17,15 @@ fi
 
 # We use iptables to prevent connecting to our set of IPs via WAN (so no connection if VPN down)
 
-# Create a custom chain
-# We use a custom chain so that our rules don't get mixed up with any others.
-# This makes updating them much safer.
-iptables -N VPN_KILLSWITCH
-
 # Create a couple of ipsets. One for live use, one to build the set in and then swap it in to live.
 # Swapping like this avoids any potential gap in protection as the set of IPs is built.
 ipset create vpn-killswitch-ipset-live iphash
 ipset create vpn-killswitch-ipset-swap iphash
 
-# Example of prevent 192.168.1.11 from reaching the internet directly (so no connection if VPN down)
-#iptables -I CUSTOM_FORWARD -s 192.168.1.11 -o eth0 -j DROP
+# Create a custom chain
+# We use a custom chain so that our rules don't get mixed up with any others.
+# This makes updating them much safer.
+iptables -N VPN_KILLSWITCH
 
 # Block any traffic going to IPs in the live ipset that was trying to leave via the WAN (eth0)
 iptables -A VPN_KILLSWITCH -m set --match-set vpn-killswitch-ipset-live dst -o eth0 -j REJECT --reject-with icmp-net-unreachable

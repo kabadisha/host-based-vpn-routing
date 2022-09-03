@@ -13,43 +13,51 @@ One of the new features recently is the VPN Director. This lets you more easily 
 
 ### The solution
 
-I've created a custom script that solves both problems by converting a list of hostnames to route via VPN into VPN Director policy rules as well as corresponding iptables rules to block traffic to those hosts routing via the WAN.
+I've created a set of custom scripts that solves both problems by converting a list of hostnames to route via VPN into VPN Director policy rules as well as corresponding iptables rules to block traffic to those hosts routing via the WAN.
 
 #### Prerequisites
 1. You should have already successfully configured your VPN and set the 'Redirect Internet traffic through tunnel' setting to 'VPN Director (policy rules)' mode.
 2. You should be familiar with using user scripts and be familiar enough with scripting to be able to make sense of my script below. Don't just copy/paste and hope you can trust me not to break your router.
 
 #### Installation
-The first script is the `firewall-start` script. This will run when the router boots, sets everything up and:
+The first script is the `vpn-director-hosts-setup.sh` script. This will run when the router boots, sets everything up and:
 
-1. Creates a new custom iptables chain that we can put our rules in.
-2. Adds that chain to the start of the built in FORWARD chain.
-3. Executes the vpn_director_host_rules.sh script (below) in order to generate the rules for the hosts we want to route.
-4. Adds that same script to the crontab so that it runs every 10 minutes. This is so that we can keep on top of IP address changes.
+1. Create a couple of ipsets. One for live use, one to build the set in and then swap it in to live.
+2. Creates a new custom iptables chain called `VPN_KILLSWITCH` that we can put our rules in.
+3. Adds a rule in that chain to block any traffic going to IPs in the live ipset that was trying to leave via the WAN (eth0).
+4. Add rule to return to the calling chain (the FORWARD chain)
+5. Adds the `VPN_KILLSWITCH` chain to the start of the built in FORWARD chain.
+6. Executes the `vpn-director-hosts-update.sh` script (below) in order to generate the rules for the hosts we want to route.
+7. Adds that same script to the crontab so that it runs every 10 minutes. This is so that we can keep on top of IP address changes.
 
-Add this script as `/jffs/scripts/firewall-start` and make it executable.
-
-The `vpn_director_host_rules.sh` script is the meat of the operation. It has the list of hosts at the top which you can edit to include the hostnames you want to route to over the VPN and **ONLY** over the VPN.
+Add this script as `/jffs/scripts/vpn-director-hosts-setup.sh` and make it executable.
+Add these two lines to `/jffs/scripts/firewall-start`:
+```bash
+# Setup VPN Director Hosts funcationality
+/jffs/scripts/vpn-director-hosts-setup.sh
+```
+The `vpn-director-hosts-setup.sh` script is the meat of the operation. It has the list of hosts at the top which you can edit to include the hostnames you want to route to over the VPN and **ONLY** over the VPN.
 
 You can read the code and the comments to see exactly how it does this, but in a nutshell:
-
-1. It fetches the currently live list of rules and filters out the auto-generated rules from the last run to get a list of all the manually created rules in order to preserve them.
+1. It fetches the currently live list of rules and filters out the auto-generated rules from the last run to get a list of all the rules manually created through the router's UI in order to preserve them.
 2. It then iterates over the list of hostnames, using nslookup to resolve the IPs for each and awk to do some filtering of the nslookup output.
 3. For each IP, it:
-	1. Generates a rule in the VPN Director format and adds it to a temporary VPN Director rules file.
-	2. Generates a corresponding iptables rule that rejects any packets trying to leave for that IP over the WAN (this is the 'kill switch'). It adds each rule to the begining of the custom FORWARD iptables chain that we created earlier, pushing all the existing rules (from the last run) down the chain.
-	3. Next it trims the old rules that have been pushed down the chain. This feels a bit of a 'clunky' way to do it, but this was the best way I could come up with without creating a small window where the rules were not in effect at each run. Flushing the table and then re-building it would be easier, but would have that side-effect.
-	4. Diffs the newly created temporary VPN Director rules file with the existing one and replaces it only if there are any changes. This is done to avoid writing to the JFFS parition over and over, causing wear on the flash.
+	1. Generates a rule in the VPN Director format and adds it to a temporary VPN Director rules file and adds that IP to a list of those that should be included in the 'kill switch' ipset.
+	2. Diffs the newly created temporary VPN Director rules file with the existing one to see if any changes to IPs actually happened since the script last ran. This is done to avoid writing to the JFFS parition over and over, causing wear on the flash.
+	3. If there were changes then:
+		1. The new VPN Director rules file is written.
+		2. The ipset for the 'kill switch' is updated.
+		3. The VPN routing is restarted to apply the changed.
 
-Add this script as `/jffs/scripts/vpn_director_host_rules.sh` and make it executable, then edit the list of hostnames near the top. Take care to respect the single quotes that wrap the whole list.
+Add this script as `/jffs/scripts/vpn-director-hosts-setup.sh` and make it executable, then edit the list of hostnames near the top. Take care to respect the single quotes that wrap the whole list.
 
 Reboot your router and you should be good to go!
 
 #### Testing
-To test, leave **whatismyipaddress.com** in your hostname list. If you visit that site when your VPN is up, you should see your external IP is that of your VPN provider. If you turn off the VPN client and try again, the page should fail to load.
+To test, leave **whatismyipaddress.com|OVPN1** in your hostname list. If you visit that site when your VPN is up, you should see your external IP is that of your VPN provider. If you turn off the VPN client and try again, the page should fail to load.
 
-You can manually run `/jffs/scripts/vpn_director_host_rules.sh` and see if it is spitting out any errors.
+You can manually run `/jffs/scripts/vpn-director-hosts-setup.sh` and see if it is spitting out any errors.
 
-You can run `iptables -S CUSTOM_FORWARD` to see the list of iptables rules that the script has generated.
+You can run `ipset list vpn-killswitch-ipset-live` to see the list of IPs the script has added to the 'kill switch'.
 
 Enjoy!
