@@ -11,8 +11,8 @@ if ! ipset -v 2>/dev/null | grep -qE 'v6|v7'; then
 fi
 
 if [ ! -f /lib/modules/"$(uname -r)"/kernel/net/netfilter/ipset/ip_set_hash_ipmac.ko ]; then
-	echo "[*] IPSet Extensions Not Supported - Please Update To Latest Firmware"
-	echo; exit 1
+  echo "[*] IPSet Extensions Not Supported - Please Update To Latest Firmware"
+  echo; exit 1
 fi
 
 # We use iptables to prevent connecting to our set of IPs via WAN (so no connection if VPN down)

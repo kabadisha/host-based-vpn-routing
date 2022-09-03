@@ -9,7 +9,7 @@ RULES='
 whatismyipaddress.com|OVPN1
 www.whatismyip-address.com|OVPN2
 whatismyipaddress.com|OVPN1
-netflix.com|WAN'
+www.netflix.com|WAN'
 
 # Create a new temp file with any rules manually created using the router's UI.
 # When we edit the rules via the GUI, the rules file gets put on one line
