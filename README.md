@@ -31,6 +31,7 @@ The first script is the `vpn-director-hosts-setup.sh` script. This will run when
 7. Adds that same script to the crontab so that it runs every 10 minutes. This is so that we can keep on top of IP address changes.
 
 Add this script as `/jffs/scripts/vpn-director-hosts-setup.sh` and make it executable.
+
 Add these two lines to `/jffs/scripts/firewall-start`:
 ```bash
 # Setup VPN Director Hosts funcationality
