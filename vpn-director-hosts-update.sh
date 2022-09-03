@@ -11,7 +11,7 @@ www.whatismyip-address.com|OVPN2
 whatismyipaddress.com|OVPN1
 netflix.com|WAN'
 
-# Create a new temp file with any manually created rules
+# Create a new temp file with any rules manually created using the router's UI.
 # When we edit the rules via the GUI, the rules file gets put on one line
 # The sed command splits it on '<' chars not preceded by whitespace in order to split by line.
 # The grep then excludes all the auto-generated rules.
@@ -40,6 +40,7 @@ for RULE in ${RULES}; do
 
     # If the rule was not directing to WAN, then add the IP to a list for later
     # when we create the corresponding iptables rules to act as the 'kill switch'
+    # We don't want to add rules directing traffic to WAN added to the 'kill switch'
     if [ "$INTERFACE" != "WAN" ]; then
       IPS="${IPS} ${IP}"
     fi
