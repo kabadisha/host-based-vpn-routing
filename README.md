@@ -28,7 +28,7 @@ I've also changed the cron job to update the rules run only once every 12 hours 
 
 #### Prerequisites
 1. You should have already successfully configured your VPN and set the 'Redirect Internet traffic through tunnel' setting to 'VPN Director (policy rules)' mode.
-2. You should be familiar with using user scripts and be familiar enough with scripting to be able to make sense of my script below. Don't just copy/paste and hope you can trust me not to break your router.
+2. You should be familiar with using user scripts and be familiar enough with scripting to be able to make sense of my script. Don't just copy/paste and hope you can trust me not to break your router or do something even worse.
 
 #### Installation
 The first script is the `vpn-director-hosts-setup.sh` script. This will run when the router boots, sets everything up and:
