@@ -1,0 +1,15 @@
+#!/bin/sh
+# Firewall Startup Script:
+
+# Create a custom chain
+# We use a custom chain so that our rules don't get mixed up with any others.
+# This makes updating them much safer.
+iptables -N CUSTOM_FORWARD
+# Add custom chain to the top of the FORWARD chain so the rules get executed early.
+iptables -I FORWARD -j CUSTOM_FORWARD
+
+# Setup custom rules
+/jffs/scripts/vpn_director_host_rules.sh
+
+# Add crontab entry to refresh domain based rules every 10 minutes
+cru a setup_vpn_director "*/10 * * * *" /jffs/scripts/vpn_director_host_rules.sh
