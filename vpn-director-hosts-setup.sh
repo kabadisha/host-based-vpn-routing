@@ -3,15 +3,16 @@
 # Cause the script to exit if errors are encountered
 set -e
 set -u
+script_name=$(basename "$0")
 
 # Check if a modern version of ipset is installed. Abort if not.
 if ! ipset -v 2>/dev/null | grep -qE 'v6|v7'; then
-  logger -s -p user.info 'IPSet version on this router not supported. Requires v6 or above. Your version is:'$(ipset -v | sed -e 's/^/ /')
+  logger -sc "$script_name: IPSet version on this router not supported. Requires v6 or above. Your version is:"$(ipset -v | sed -e 's/^/ /')
   echo; exit 1
 fi
 
 if [ ! -f /lib/modules/"$(uname -r)"/kernel/net/netfilter/ipset/ip_set_hash_ipmac.ko ]; then
-  echo "[*] IPSet Extensions Not Supported - Please Update To Latest Firmware"
+  logger -sc "$script_name: [*] IPSet Extensions Not Supported - Please Update To Latest Firmware"
   echo; exit 1
 fi
 
@@ -35,6 +36,8 @@ iptables -A VPN_KILLSWITCH -j RETURN
 
 # Add custom chain to the top of the FORWARD chain so the rules get executed early.
 iptables -I FORWARD -j VPN_KILLSWITCH
+
+logger -sc "$script_name: Setup complete. Starting initial update process..."
 
 # Setup custom rules
 /jffs/scripts/vpn-director-hosts-update.sh

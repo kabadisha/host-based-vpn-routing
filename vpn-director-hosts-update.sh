@@ -3,6 +3,7 @@
 # Cause the script to exit if errors are encountered
 set -e
 set -u
+script_name=$(basename "$0")
 
 # Edit this list of rules (just be careful with the single quote at the beginning and end of the list):
 RULES='
@@ -16,10 +17,10 @@ whatismyipaddress.com|WAN'
 # The grep then excludes all the auto-generated rules.
 # We use '|| true' to force the command result to be 0 even if no rows were found by
 # grep (because there were no manually created rules).
-sed 's:\(.\)<:\1\n<:g' /jffs/openvpn/vpndirector_rulelist | grep -v 'DNS-AUTO-' > /tmp/vpndirector_rulelist || true
+sed 's:\(.\)<:\1\n<:g' /jffs/openvpn/vpndirector_rulelist | grep -v 'DNS-AUTO-' > /tmp/new_vpndirector_rulelist || true
 
 # Print out any manual rules that were found (useful for debugging when running the script manually).
-cat /tmp/vpndirector_rulelist
+# cat /tmp/new_vpndirector_rulelist
 
 IPS=""
 INDEX=1
@@ -53,7 +54,7 @@ for RULE in ${RULES}; do
   # Then ditch any lines with a ':' in them, since those will be IPv6 results.
   # Then sort the results so that we get some consitency when checking for changes later.
   for IP in $(nslookup $HOST $DNS_SERVER | awk '(NR>2) && /^Address/ {print $3}' | awk '!/:/' | sort); do
-    echo '<1>DNS-AUTO-'$HOST'>>'$IP'>'$INTERFACE
+    logger -sc "$script_name: <1>DNS-AUTO-$HOST>>$IP>$INTERFACE"
 
     # If the rule was not directing to WAN, then add the IP to a list for later
     # when we create the corresponding iptables rules to act as the 'kill switch'
@@ -65,7 +66,7 @@ for RULE in ${RULES}; do
     # Add an entry to VPN Director rules temporary file:
     # Rule example:
     # #<1>WhatIsMyIP>>104.16.154.36>OVPN1
-    echo '<1>DNS-AUTO-'$HOST'>>'$IP'>'$INTERFACE >> /tmp/vpndirector_rulelist
+    echo '<1>DNS-AUTO-'$HOST'>>'$IP'>'$INTERFACE >> /tmp/new_vpndirector_rulelist
 
     let INDEX=$INDEX+1
   done
@@ -74,14 +75,14 @@ done
 let RULE_COUNT=$INDEX-1
 
 # Compare the new rule list with the old one and see if anything has changed.
-# This saves on writes to jffs and reduces wear on the flash drive.
-if ! diff /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist >/dev/null; then
-  logger -s -p user.info 'New changes to VPN Director policies detected, writing to jffs...'
+# We do this in order to minimise writes to the JFFS partition.
+if ! diff /tmp/new_vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist >/dev/null; then
+  logger -sc "$script_name: New changes to VPN Director policies detected, updating..."
 
   # We first flush any previous IPs from the swap ipset
   ipset flush vpn-killswitch-ipset-swap
 
-  echo 'Updating vpn-only-ipset-swap ipset...'
+  logger -sc "$script_name: Updating vpn-only-ipset-swap ipset..."
   for IP in ${IPS}; do
     # N.B. We don't just add using the hostname since the ipset command would
     # only add the first IP if more than one applies to a host. We want them all.
@@ -89,19 +90,25 @@ if ! diff /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist >/dev/nul
     ipset add vpn-killswitch-ipset-swap $IP -exist
   done
 
-  echo 'Swapping in the ipset to live. IPs are:'
+  logger -sc "$script_name: Swapping in the ipset to live. IPs are:"
   ipset list vpn-killswitch-ipset-swap
   ipset swap vpn-killswitch-ipset-swap vpn-killswitch-ipset-live
 
   # We flush the swap ipset to save a bit of memory now we've finished with it.
   ipset flush vpn-killswitch-ipset-swap
 
-  echo 'Restarting VPN routing to apply new rules...'
-  date >> /tmp/vpn_rules_update_audit.log
-  cp /tmp/vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist
+  logger -sc "$script_name: Restarting VPN routing to apply new rules..."
+  # This line can be uncommented to create an audit log of changes for debugging.
+  # date >> /tmp/vpn_rules_update_audit.log
+
+  cp /tmp/new_vpndirector_rulelist /jffs/openvpn/vpndirector_rulelist
   # Restart VPN routing in order to refresh rules:
   service restart_vpnrouting
 
 else
-  echo 'No changes to VPN Director policies since last run. Nothing to update.'
+  logger -sc "$script_name: No changes to VPN Director policies since last run. Nothing to update."
 fi
+
+# Delete the temp file to free up some RAM
+rm /tmp/new_vpndirector_rulelist
+logger -sc "$script_name: Update complete."
