@@ -31,9 +31,12 @@ for RULE in ${RULES}; do
   INTERFACE=${RULE#*\|}
 
   # We choose a DNS server to use for nslookup.
-  # The IPs in VPN Director rules must be the same as those in use by client
-  # devices that are using cached DNS lookups. The solution is to query the DNS
-  # server that LAN clients are actually using for their lookups.
+  # The IPs in VPN Director rules must be the same as those in use by client devices that are using cached DNS lookups.
+  # Some domains (like netflix.com) use DNS based load-balancing and so return different IPs each time you do a lookup.
+  # This causes two issues:
+  # 1. That nslookup always gets different IPs and so the script will always think that IPs have changed.
+  # 2. That the IPs in VPN Director rules will be different to those in use by client devices that are using cached DNS lookups.
+  # The solution is to query the DNS server that LAN clients are actually using for their lookups.
   if [ $(nvram get dhcp_dns1_x) ]; then
     # If a DNS server is configured in the DHCP server settings, then use that.
     DNS_SERVER=$(nvram get dhcp_dns1_x)
